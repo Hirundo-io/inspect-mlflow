@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "inspect-ai>=0.3.180",
-    "mlflow>=3.0,<4.0",
+    "mlflow-skinny>=2.20.3,<4",
     "numpy>=1.24",
 ]
 
