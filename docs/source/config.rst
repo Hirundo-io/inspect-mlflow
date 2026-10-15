@@ -48,7 +48,8 @@ invalid values raise a configuration error.
 When ``INSPECT_MLFLOW_PARENT_RUN_ID`` is set, the tracking hook nests its task runs
 under that run instead of creating a parent of its own. It takes the experiment from
 the supplied run rather than from ``MLFLOW_EXPERIMENT_NAME``, and leaves the run for
-its owner to terminate.
+its owner to terminate. If the run cannot be read, the hook logs an error and creates
+its own parent run instead.
 
 Autolog support map includes ``openai``, ``anthropic``, ``langchain``, ``litellm``,
 ``mistral``, ``groq``, ``cohere``, ``gemini``, and ``bedrock``.

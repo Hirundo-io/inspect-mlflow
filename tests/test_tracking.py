@@ -35,7 +35,6 @@ from inspect_ai.model._chat_message import ChatMessageAssistant
 from inspect_ai.model._generate_config import GenerateConfig
 from inspect_ai.model._model_output import ChatCompletionChoice, ModelOutput, ModelUsage
 from inspect_ai.scorer._metric import Score
-from mlflow.exceptions import MlflowException
 
 from inspect_mlflow.tracking import MlflowTrackingHooks
 from inspect_mlflow.util import score_to_numeric
@@ -239,19 +238,26 @@ async def test_adopts_caller_supplied_parent_run(tmp_tracking_uri, monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_unknown_parent_run_id_is_reported(tmp_tracking_uri, monkeypatch, caplog):
+async def test_unknown_parent_run_id_falls_back(tmp_tracking_uri, monkeypatch, caplog):
     monkeypatch.setenv("INSPECT_MLFLOW_PARENT_RUN_ID", "no-such-run")
     hook = MlflowTrackingHooks()
 
     with caplog.at_level(logging.ERROR, logger="inspect_mlflow.tracking"):
-        with pytest.raises(MlflowException):
-            await hook.on_run_start(RunStart(eval_set_id=None, run_id="run-001", task_names=["t"]))
+        await hook.on_run_start(RunStart(eval_set_id=None, run_id="run-001", task_names=["t"]))
 
-    assert hook._parent_run_id is None
-    assert [r.getMessage() for r in caplog.records] == [
-        "Parent run no-such-run from INSPECT_MLFLOW_PARENT_RUN_ID could not be read; "
-        "this evaluation will not be tracked"
-    ]
+    # The eval is still tracked, under a parent run the hook created itself.
+    assert hook._parent_run_id is not None
+    assert hook._adopted_parent is False
+    parent = mlflow.tracking.MlflowClient().get_run(hook._parent_run_id)
+    assert parent.data.tags["inspect.run_id"] == "run-001"
+    [message] = [r.getMessage() for r in caplog.records]
+    assert message.startswith(
+        "Parent run no-such-run from INSPECT_MLFLOW_PARENT_RUN_ID could not be read ("
+    )
+    assert message.endswith("). Creating a new parent run instead")
+
+    await hook.on_run_end(RunEnd(eval_set_id=None, run_id="run-001", exception=None, logs=[]))
+    assert mlflow.tracking.MlflowClient().get_run(parent.info.run_id).info.status == "FINISHED"
 
 
 # --- Task lifecycle ---

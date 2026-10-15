@@ -130,13 +130,13 @@ class MlflowTrackingHooks(Hooks):
         if self.settings.parent_run_id:
             try:
                 adopted_run = self._client.get_run(self.settings.parent_run_id)
-            except Exception:
+            except Exception as exc:
                 _logger.error(
-                    "Parent run %s from INSPECT_MLFLOW_PARENT_RUN_ID could not be read; "
-                    "this evaluation will not be tracked",
+                    "Parent run %s from INSPECT_MLFLOW_PARENT_RUN_ID could not be read (%s). "
+                    "Creating a new parent run instead",
                     self.settings.parent_run_id,
+                    exc,
                 )
-                raise
 
         if adopted_run is not None:
             # Take the experiment from the adopted run: task runs are created with
