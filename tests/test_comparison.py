@@ -135,6 +135,57 @@ def test_align_string_int_id_normalization():
     assert aligned[0].candidate is not None
 
 
+def test_align_preserves_zero_padded_ids_and_scores():
+    baseline = _make_eval_log(
+        samples=[
+            _make_sample("1", scores={"acc": "I"}),
+            _make_sample("01", scores={"acc": "C"}),
+        ]
+    )
+    candidate = _make_eval_log(
+        samples=[
+            _make_sample("01", scores={"acc": "I"}),
+            _make_sample(1, scores={"acc": "C"}),
+        ]
+    )
+
+    aligned = align_samples(baseline, candidate)
+    comparisons = _compare_samples(aligned, ["acc"])
+
+    assert [(sample.id, sample.delta) for sample in comparisons] == [(1, 1.0), ("01", -1.0)]
+
+
+@pytest.mark.parametrize(
+    "sample_id", ["²", "\u0661", "\uff11", "00", pytest.param("1" * 5000, id="long-decimal")]
+)
+def test_align_accepts_noncanonical_and_long_string_ids(sample_id):
+    baseline_sample = _make_sample(sample_id)
+    candidate_sample = _make_sample(sample_id)
+
+    aligned = align_samples(
+        _make_eval_log(samples=[baseline_sample]),
+        _make_eval_log(samples=[candidate_sample]),
+    )
+
+    assert len(aligned) == 1
+    assert aligned[0].id == sample_id
+    assert aligned[0].baseline is baseline_sample
+    assert aligned[0].candidate is candidate_sample
+
+
+@pytest.mark.parametrize("log_name", ["baseline", "candidate"])
+@pytest.mark.parametrize("sample_ids", [[1, "1"], ["1", 1], ["same", "same"]])
+def test_align_rejects_duplicate_or_ambiguous_ids(log_name, sample_ids):
+    duplicate_log = _make_eval_log(samples=[_make_sample(sample_id) for sample_id in sample_ids])
+    empty_log = _make_eval_log(samples=[])
+    baseline, candidate = (
+        (duplicate_log, empty_log) if log_name == "baseline" else (empty_log, duplicate_log)
+    )
+
+    with pytest.raises(ValueError, match=f"sample IDs in {log_name} log at epoch 1"):
+        align_samples(baseline, candidate)
+
+
 def test_align_multi_epoch():
     baseline = _make_eval_log(
         samples=[
